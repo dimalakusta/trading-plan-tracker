@@ -4,13 +4,11 @@ import { APPS_SCRIPT_URL } from "./config";
 
 
 async function request(action, payload = {}) {
-
   if (!APPS_SCRIPT_URL) {
     throw new Error(
       "Google Apps Script URL is not configured"
     );
   }
-
 
   const response = await axios.get(
     APPS_SCRIPT_URL,
@@ -19,11 +17,9 @@ async function request(action, payload = {}) {
         action,
         ...payload
       },
-
       timeout: 15000
     }
   );
-
 
   return response.data;
 }
@@ -31,8 +27,11 @@ async function request(action, payload = {}) {
 
 const api = {
 
-  async getRecords() {
+  // =====================================================
+  // ОТРИМАТИ ВСІ ЗАПИСИ
+  // =====================================================
 
+  async getRecords() {
     const data =
       await request("getRecords");
 
@@ -47,8 +46,11 @@ const api = {
   },
 
 
-  async getPlan() {
+  // =====================================================
+  // ОТРИМАТИ ПЛАН
+  // =====================================================
 
+  async getPlan() {
     const data =
       await request("getPlan");
 
@@ -63,47 +65,75 @@ const api = {
   },
 
 
-  async saveRecord(record) {
+  // =====================================================
+  // СТАРЕ ЗБЕРЕЖЕННЯ ОКРЕМОГО ЗАПИСУ
+  // =====================================================
 
+  async saveRecord(record) {
     const data =
       await request(
         "saveRecord",
         record
       );
 
-
     if (!data.ok) {
-
       throw new Error(
         data.error ||
         "Save failed"
       );
-
     }
-
 
     return data;
   },
 
 
-  async savePlan(plan) {
+  // =====================================================
+  // ПОВНІСТЮ ЗАМІНИТИ ІСТОРІЮ
+  //
+  // Використовується для:
+  // - редагування
+  // - видалення
+  // - автоматичного перерахунку
+  // =====================================================
 
+  async replaceRecords(records) {
+    const data =
+      await request(
+        "replaceRecords",
+        {
+          records:
+            JSON.stringify(records)
+        }
+      );
+
+    if (!data.ok) {
+      throw new Error(
+        data.error ||
+        "Failed to update records"
+      );
+    }
+
+    return data;
+  },
+
+
+  // =====================================================
+  // ЗБЕРЕГТИ ПЛАН
+  // =====================================================
+
+  async savePlan(plan) {
     const data =
       await request(
         "savePlan",
         plan
       );
 
-
     if (!data.ok) {
-
       throw new Error(
         data.error ||
         "Save failed"
       );
-
     }
-
 
     return data;
   }

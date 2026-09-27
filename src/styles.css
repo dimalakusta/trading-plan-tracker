@@ -1344,7 +1344,274 @@ h3 {
 
 
 
+/* =========================
+   ANALYTICS ACTIONS
+========================= */
 
+.section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.section-title-row h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.icon-button {
+  width: 38px;
+  height: 38px;
+
+  border: 1px solid #ddd8e8;
+  border-radius: 10px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  cursor: pointer;
+
+  background: #ffffff;
+
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.icon-button:hover {
+  transform: translateY(-1px);
+}
+
+.icon-button.edit:hover {
+  background: #f0ecff;
+  border-color: #b8addb;
+}
+
+.icon-button.delete:hover {
+  background: #fff0f0;
+  border-color: #e3aaaa;
+}
+
+.icon-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+
+/* =========================
+   READONLY INPUTS
+========================= */
+
+.readonly-input {
+  background: #f7f5fa !important;
+  color: #555064;
+  cursor: default;
+}
+
+.field-hint {
+  display: block;
+  margin-top: 6px;
+  color: #8b8694;
+  font-size: 12px;
+}
+
+
+/* =========================
+   CALCULATION PREVIEW
+========================= */
+
+.calculation-preview {
+  display: grid;
+
+  grid-template-columns:
+    repeat(4, 1fr);
+
+  gap: 12px;
+
+  margin: 20px 0;
+
+  padding: 16px;
+
+  background: #f7f5fa;
+
+  border: 1px solid #e5e0ec;
+
+  border-radius: 14px;
+}
+
+.calculation-preview > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.calculation-preview span {
+  font-size: 12px;
+  color: #817b8d;
+}
+
+.calculation-preview strong {
+  font-size: 16px;
+}
+
+
+/* =========================
+   BUTTONS
+========================= */
+
+.secondary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+
+  min-height: 42px;
+
+  padding: 0 16px;
+
+  border: 1px solid #d8d2e2;
+
+  border-radius: 10px;
+
+  background: #ffffff;
+
+  color: #393149;
+
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+.secondary-button:hover {
+  background: #f7f5fa;
+}
+
+
+/* =========================
+   STATUS
+========================= */
+
+.status {
+  display: inline-flex;
+  align-items: center;
+
+  padding: 5px 9px;
+
+  border-radius: 999px;
+
+  font-size: 12px;
+
+  font-weight: 600;
+
+  white-space: nowrap;
+}
+
+.status.success {
+  background: #e7f7ee;
+  color: #16834b;
+}
+
+.status.warning {
+  background: #fff4dc;
+  color: #a36b00;
+}
+
+
+/* =========================
+   RECORD COUNT
+========================= */
+
+.record-count {
+  color: #8a8494;
+  font-size: 13px;
+}
+
+
+/* =========================
+   COLORS
+========================= */
+
+.positive {
+  color: #15965b !important;
+}
+
+.negative {
+  color: #d64545 !important;
+}
+
+.input-positive {
+  color: #15965b !important;
+}
+
+.input-negative {
+  color: #d64545 !important;
+}
+
+
+/* =========================
+   EMPTY STATE
+========================= */
+
+.empty-state {
+  padding: 40px 20px;
+
+  text-align: center;
+
+  color: #8b8694;
+}
+
+
+/* =========================
+   MOBILE
+========================= */
+
+@media (max-width: 800px) {
+  .calculation-preview {
+    grid-template-columns:
+      repeat(2, 1fr);
+  }
+
+  .section-title-row {
+    align-items: flex-start;
+  }
+}
+
+
+@media (max-width: 600px) {
+
+  .calculation-preview {
+    grid-template-columns: 1fr;
+  }
+
+  .row-actions {
+    flex-direction: column;
+  }
+
+  .icon-button {
+    width: 42px;
+    height: 42px;
+  }
+
+  .section-title-row {
+    flex-direction: column;
+  }
+
+  .secondary-button {
+    width: 100%;
+  }
+}
 
 
 
@@ -1388,6 +1655,295 @@ Preloader
 
   to {
     transform: rotate(360deg);
+  }
+
+}
+
+
+
+/* =====================================================
+   DELETE MODAL
+===================================================== */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+
+  z-index: 1000;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 20px;
+
+  background: rgba(31, 26, 48, 0.48);
+
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+
+  animation: modalOverlayIn 0.18s ease;
+}
+
+
+.delete-modal {
+  width: 100%;
+  max-width: 440px;
+
+  padding: 28px;
+
+  background: #ffffff;
+
+  border: 1px solid #e4dfeb;
+  border-radius: 18px;
+
+  box-shadow:
+    0 20px 60px rgba(38, 31, 56, 0.22);
+
+  animation: modalIn 0.2s ease;
+}
+
+
+.delete-modal-icon {
+  width: 52px;
+  height: 52px;
+
+  margin-bottom: 18px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 14px;
+
+  background: #fff0f0;
+  color: #d64545;
+}
+
+
+.delete-modal-content h3 {
+  margin: 0 0 8px;
+
+  color: #302a3d;
+
+  font-size: 20px;
+  font-weight: 700;
+}
+
+
+.delete-modal-content p {
+  margin: 0 0 6px;
+
+  color: #4f4a58;
+
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+
+.delete-modal-content p strong {
+  color: #322b4c;
+}
+
+
+.delete-modal-content span {
+  display: block;
+
+  color: #8a8494;
+
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+
+.delete-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+
+  margin-top: 26px;
+}
+
+
+.modal-cancel-button,
+.modal-delete-button {
+  min-height: 44px;
+
+  padding: 0 16px;
+
+  border-radius: 10px;
+
+  font-size: 14px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.15s ease;
+}
+
+
+.modal-cancel-button {
+  border: 1px solid #d9d4e2;
+
+  background: #ffffff;
+
+  color: #403a4d;
+}
+
+
+.modal-cancel-button:hover {
+  background: #f7f5fa;
+
+  border-color: #c9c2d5;
+}
+
+
+.modal-delete-button {
+  border: 1px solid #d64545;
+
+  background: #d64545;
+
+  color: #ffffff;
+}
+
+
+.modal-delete-button:hover {
+  background: #bd3838;
+
+  border-color: #bd3838;
+
+  transform: translateY(-1px);
+}
+
+
+.modal-cancel-button:disabled,
+.modal-delete-button:disabled {
+  opacity: 0.6;
+
+  cursor: not-allowed;
+
+  transform: none;
+}
+
+
+/* =====================================================
+   MODAL ANIMATION
+===================================================== */
+
+@keyframes modalOverlayIn {
+
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+
+}
+
+
+@keyframes modalIn {
+
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+}
+
+
+/* =====================================================
+   COMMENT FIELD
+===================================================== */
+
+.field textarea {
+  width: 100%;
+
+  height: 48px;
+  min-height: 48px;
+  max-height: 48px;
+
+  box-sizing: border-box;
+
+  resize: none;
+
+  padding: 0 14px;
+
+  display: flex;
+  align-items: center;
+
+  border: 1px solid #ded9e6;
+  border-radius: 10px;
+
+  background: #ffffff;
+
+  color: #322b4c;
+
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 48px;
+
+  outline: none;
+
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+
+.field textarea:focus {
+  border-color: #322b4c;
+
+  box-shadow:
+    0 0 0 3px rgba(50, 43, 76, 0.08);
+}
+
+
+.field textarea::placeholder {
+  color: #aaa5b2;
+}
+
+
+/* =====================================================
+   MOBILE MODAL
+===================================================== */
+
+@media (max-width: 600px) {
+
+  .modal-overlay {
+    padding: 16px;
+  }
+
+
+  .delete-modal {
+    padding: 22px;
+
+    border-radius: 16px;
+  }
+
+
+  .delete-modal-actions {
+    flex-direction: column-reverse;
+  }
+
+
+  .modal-cancel-button,
+  .modal-delete-button {
+    width: 100%;
   }
 
 }

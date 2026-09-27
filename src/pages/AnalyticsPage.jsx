@@ -1,191 +1,197 @@
 import {
   useEffect,
+  useMemo,
   useState
 } from "react";
 
 import {
   BarChart3,
-  RefreshCw,
-  Save
+  Save,
+  Pencil,
+  Trash2,
+  X
 } from "lucide-react";
 
 import api from "../api";
 
 
-const money = (number) => {
+function getToday() {
+  const now = new Date();
 
-  return new Intl.NumberFormat(
+  const localDate =
+    new Date(
+      now.getTime() -
+      now.getTimezoneOffset() *
+      60000
+    );
+
+  return localDate
+    .toISOString()
+    .slice(0, 10);
+}
+
+
+function formatMoney(value) {
+  return Number(
+    value || 0
+  ).toLocaleString(
     "uk-UA",
     {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     }
-  ).format(
-    Number(number || 0)
   );
-
-};
-
-
-export default function AnalyticsPage() {
-
-  // ---------------------------------------------------
-  // План
-  // ---------------------------------------------------
-
-  const [plan, setPlan] =
-    useState(null);
+}
 
 
-  // ---------------------------------------------------
-  // Записи
-  // ---------------------------------------------------
+function formatDate(value) {
 
-  const [entries, setEntries] =
-    useState([]);
-
-
-  // ---------------------------------------------------
-  // Форма
-  // ---------------------------------------------------
-
-  const [form, setForm] =
-    useState({
-      day: "",
-      date: "",
-      balanceStart: "",
-      actualProfit: "",
-      roi: "",
-      trades: "",
-      notes: ""
-    });
+  if (!value) {
+    return "—";
+  }
 
 
-  // ---------------------------------------------------
-  // Loading
-  // ---------------------------------------------------
+  // Якщо дата вже у форматі
+  // YYYY-MM-DD
 
-  const [loading, setLoading] =
-    useState(true);
+  if (
+    typeof value === "string" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(
+      value
+    )
+  ) {
 
+    const [
+      year,
+      month,
+      day
+    ] = value.split("-");
 
-  // ---------------------------------------------------
-  // Message
-  // ---------------------------------------------------
-
-  const [message, setMessage] =
-    useState("");
-
-
-  // ---------------------------------------------------
-  // Load
-  // ---------------------------------------------------
-
-  async function load() {
-
-    setLoading(true);
-    setMessage("");
-
-
-    try {
-
-      const [
-        recordsData,
-        currentPlan
-      ] = await Promise.all([
-
-        api.getRecords(),
-
-        api.getPlan()
-
-      ]);
-
-
-      setEntries(
-        Array.isArray(recordsData)
-          ? recordsData
-          : []
-      );
-
-
-      if (!currentPlan) {
-
-        throw new Error(
-          "План не знайдено"
-        );
-
-      }
-
-
-      setPlan(currentPlan);
-
-    } catch (error) {
-
-      console.error(
-        "Не вдалося завантажити дані:",
-        error
-      );
-
-
-      setMessage(
-        "Не вдалося завантажити дані. " +
-        "Перевір підключення Google Sheets."
-      );
-
-    } finally {
-
-      setLoading(false);
-
-    }
+    return `${day}.${month}.${year}`;
 
   }
 
 
-  // ---------------------------------------------------
-  // Initial load
-  // ---------------------------------------------------
-
-  useEffect(() => {
-
-    load();
-
-  }, []);
+  const date =
+    new Date(value);
 
 
-  // ---------------------------------------------------
-  // Save record
-  // ---------------------------------------------------
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
 
-  async function saveRecord(event) {
+    return String(value);
 
-    event.preventDefault();
-
-
-    const balanceStart =
-      Number(form.balanceStart);
+  }
 
 
-    const actualProfit =
-      Number(form.actualProfit);
+  return date.toLocaleDateString(
+    "uk-UA"
+  );
+
+}
 
 
-    const balanceEnd =
-      balanceStart +
-      actualProfit;
+// =====================================================
+// ПЕРЕРАХУНОК ВСІЄЇ ІСТОРІЇ
+// =====================================================
+//
+// Якщо змінюємо День 2,
+// День 3, День 4 і т.д.
+// повинні автоматично отримати
+// правильний баланс на початку.
+//
+// =====================================================
+
+function recalculateRecords(
+  records,
+  plan
+) {
+
+  const sorted =
+    [...records].sort(
+      (a, b) => {
+
+        const dayDifference =
+          Number(a.day || 0) -
+          Number(b.day || 0);
+
+        if (
+          dayDifference !== 0
+        ) {
+
+          return dayDifference;
+
+        }
 
 
-    setLoading(true);
-    setMessage("");
+        return String(
+          a.timestamp || ""
+        ).localeCompare(
+          String(
+            b.timestamp || ""
+          )
+        );
+
+      }
+    );
 
 
-    try {
+  let previousBalance =
+    Number(
+      plan.balance
+    ) || 0;
 
-      await api.saveRecord({
 
-        ...form,
+  return sorted.map(
+    (record, index) => {
+
+      const balanceStart =
+        previousBalance;
+
+
+      const balanceEnd =
+        Number(
+          record.balanceEnd
+        ) || 0;
+
+
+      const actualProfit =
+        balanceEnd -
+        balanceStart;
+
+
+      // Маржа = частина балансу,
+      // яка використовується у позиції.
+
+      const margin =
+        balanceStart *
+        (
+          Number(
+            plan.entryPercent
+          ) / 100
+        );
+
+
+      // ROI рахуємо від маржі.
+
+      const roi =
+        margin > 0
+          ? (
+            actualProfit /
+            margin
+          ) * 100
+          : 0;
+
+
+      const updatedRecord = {
+
+        ...record,
 
         day:
-          Number(form.day),
+          index + 1,
 
         balanceStart,
 
@@ -193,38 +199,121 @@ export default function AnalyticsPage() {
 
         balanceEnd,
 
-        roi:
-          Number(form.roi || 0),
+        roi
 
-        trades:
-          Number(form.trades || 0)
-
-      });
+      };
 
 
-      setMessage(
-        "День збережено."
-      );
+      previousBalance =
+        balanceEnd;
 
 
-      setForm({
+      return updatedRecord;
 
-        day: "",
-        date: "",
-        balanceStart: "",
-        actualProfit: "",
-        roi: "",
-        trades: "",
-        notes: ""
+    }
+  );
 
-      });
+}
 
 
-      // Оновлюємо дані після збереження
+export default function AnalyticsPage() {
+
+  // ===================================================
+  // STATE
+  // ===================================================
+
+  const [
+    records,
+    setRecords
+  ] = useState([]);
+
+
+  const [
+    plan,
+    setPlan
+  ] = useState({
+
+    balance: 3200,
+
+    entryPercent: 50,
+
+    leverage: 10,
+
+    roi: 10,
+
+    target: 30000
+
+  });
+
+
+  const [
+    loading,
+    setLoading
+  ] = useState(true);
+
+
+  const [
+    saving,
+    setSaving
+  ] = useState(false);
+
+
+  const [
+    editingTimestamp,
+    setEditingTimestamp
+  ] = useState(null);
+
+  const [
+    deleteRecord,
+    setDeleteRecord
+  ] = useState(null);
+
+  // Поточний баланс,
+  // який вводить користувач.
+
+  const [
+    currentBalance,
+    setCurrentBalance
+  ] = useState("");
+
+
+  // Необов'язкове поле.
+
+  const [
+    trades,
+    setTrades
+  ] = useState("");
+
+
+  // Необов'язкове поле.
+
+  const [
+    notes,
+    setNotes
+  ] = useState("");
+
+
+  // ===================================================
+  // ЗАВАНТАЖЕННЯ
+  // ===================================================
+
+  useEffect(() => {
+
+    loadAnalytics();
+
+  }, []);
+
+
+  async function loadAnalytics() {
+
+    try {
+
+      setLoading(true);
+
 
       const [
-        recordsData,
-        currentPlan
+        loadedRecords,
+        loadedPlan
       ] = await Promise.all([
 
         api.getRecords(),
@@ -234,29 +323,56 @@ export default function AnalyticsPage() {
       ]);
 
 
-      setEntries(
-        Array.isArray(recordsData)
-          ? recordsData
-          : []
-      );
+      if (loadedPlan) {
+
+        setPlan({
+
+          balance:
+            Number(
+              loadedPlan.balance
+            ) || 3200,
+
+          entryPercent:
+            Number(
+              loadedPlan.entryPercent
+            ) || 50,
+
+          leverage:
+            Number(
+              loadedPlan.leverage
+            ) || 10,
+
+          roi:
+            Number(
+              loadedPlan.roi
+            ) || 10,
+
+          target:
+            Number(
+              loadedPlan.target
+            ) || 30000
+
+        });
+
+      }
 
 
-      setPlan(
-        currentPlan
+      setRecords(
+        loadedRecords || []
       );
+
 
     } catch (error) {
 
       console.error(
-        "Помилка збереження:",
         error
       );
 
-
-      setMessage(
-        "Помилка збереження. " +
-        "Перевір підключення Google Sheets."
+      alert(
+        error.message ||
+        "Не вдалося завантажити дані"
       );
+
 
     } finally {
 
@@ -267,221 +383,749 @@ export default function AnalyticsPage() {
   }
 
 
-  // ---------------------------------------------------
-  // PRELOADER
-  // ---------------------------------------------------
+  // ===================================================
+  // СОРТУВАННЯ
+  // ===================================================
 
-  if (loading && !plan) {
+  const sortedRecords =
+    useMemo(() => {
 
-    return (
+      return [...records].sort(
+        (a, b) =>
+          Number(a.day || 0) -
+          Number(b.day || 0)
+      );
 
-      <div className="page-loader">
-
-        <div className="loader-spinner" />
-
-        <span>
-          Завантаження аналітики...
-        </span>
-
-      </div>
-
-    );
-
-  }
+    }, [records]);
 
 
-  // ---------------------------------------------------
-  // Якщо план не завантажився
-  // ---------------------------------------------------
+  // ===================================================
+  // ОСТАННІЙ ЗАПИС
+  // ===================================================
 
-  if (!plan) {
-
-    return (
-
-      <div className="page-loader">
-
-        <span>
-          {message ||
-            "Не вдалося завантажити дані."}
-        </span>
-
-        <button
-          className="secondary"
-          onClick={load}
-        >
-
-          <RefreshCw size={17} />
-
-          Спробувати ще раз
-
-        </button>
-
-      </div>
-
-    );
-
-  }
+  const lastRecord =
+    sortedRecords[
+    sortedRecords.length - 1
+    ];
 
 
-  // ---------------------------------------------------
-  // Sorting
-  // ---------------------------------------------------
-
-  const sorted =
-    [...entries].sort(
-      (a, b) =>
-        Number(a.day) -
-        Number(b.day)
-    );
-
-
-  const latest =
-    sorted[sorted.length - 1];
-
-
-  const planDay =
-    Number(
-      latest?.day || 0
-    );
-
-
-  // ---------------------------------------------------
-  // Plan balance
-  // ---------------------------------------------------
-
-  const dailyGrowth =
-    (
-      Number(plan.entryPercent) /
-      100
-    ) *
-    (
-      Number(plan.roi) /
-      100
-    );
-
-
-  const planBalance =
-    Number(plan.balance) *
-    Math.pow(
-      1 + dailyGrowth,
-      planDay
-    );
-
+  // ===================================================
+  // ПОТОЧНИЙ БАЛАНС
+  // ===================================================
 
   const actualBalance =
+    lastRecord
+
+      ? Number(
+        lastRecord.balanceEnd
+      )
+
+      : Number(
+        plan.balance
+      );
+
+
+  // ===================================================
+  // ПОТОЧНИЙ ДЕНЬ
+  // ===================================================
+
+  const currentDay =
+    lastRecord
+
+      ? Number(
+        lastRecord.day
+      )
+
+      : 0;
+
+
+  // ===================================================
+  // ЗАГАЛЬНИЙ PNL
+  // ===================================================
+
+  const totalProfit =
+    actualBalance -
     Number(
-      latest?.balanceEnd ||
-      latest?.balanceStart ||
       plan.balance
     );
 
 
+  // ===================================================
+  // ПРОГРЕС
+  // ===================================================
+
   const progress =
-    Math.min(
-      100,
-      Math.max(
-        0,
-        (
-          actualBalance /
-          Number(plan.target)
-        ) *
-        100
+    Number(
+      plan.target
+    ) > 0
+
+      ? Math.min(
+
+        100,
+
+        Math.max(
+
+          0,
+
+          (
+            actualBalance /
+            Number(
+              plan.target
+            )
+          ) * 100
+
+        )
+
+      )
+
+      : 0;
+
+
+  // ===================================================
+  // ПЛАНОВИЙ ЩОДЕННИЙ РІСТ
+  // ===================================================
+
+  const dailyGrowth =
+
+    (
+      Number(
+        plan.entryPercent
+      ) / 100
+    )
+
+    *
+
+    (
+      Number(
+        plan.roi
+      ) / 100
+    );
+
+
+  // ===================================================
+  // ПЛАНОВИЙ БАЛАНС
+  // ===================================================
+
+  const plannedBalance =
+
+    Number(
+      plan.balance
+    )
+
+    *
+
+    Math.pow(
+
+      1 + dailyGrowth,
+
+      currentDay
+
+    );
+
+
+  // ===================================================
+  // ПОПЕРЕДНІЙ БАЛАНС
+  // ===================================================
+
+  const previousBalance =
+
+    lastRecord
+
+      ? Number(
+        lastRecord.balanceEnd
+      )
+
+      : Number(
+        plan.balance
+      );
+
+
+  // ===================================================
+  // ЗАПИС, ЯКИЙ РЕДАГУЄМО
+  // ===================================================
+
+  const editingRecord =
+
+    editingTimestamp
+
+      ? records.find(
+        record =>
+          String(
+            record.timestamp
+          ) ===
+          String(
+            editingTimestamp
+          )
+      )
+
+      : null;
+
+
+  // ===================================================
+  // ПАРАМЕТРИ ФОРМИ
+  // ===================================================
+
+  const formStartBalance =
+
+    editingRecord
+
+      ? Number(
+        editingRecord.balanceStart
+      )
+
+      : previousBalance;
+
+
+  const formDay =
+
+    editingRecord
+
+      ? Number(
+        editingRecord.day
+      )
+
+      : currentDay + 1;
+
+
+  const formDate =
+
+    editingRecord
+
+      ? String(
+        editingRecord.date ||
+        getToday()
+      )
+
+      : getToday();
+
+
+  // ===================================================
+  // АВТОМАТИЧНИЙ PNL
+  // ===================================================
+
+  const calculatedProfit =
+
+    currentBalance !== ""
+
+      ? Number(
+        currentBalance
+      ) -
+      formStartBalance
+
+      : 0;
+
+
+  // ===================================================
+  // МАРЖА
+  // ===================================================
+
+  const calculatedMargin =
+
+    formStartBalance *
+
+    (
+      Number(
+        plan.entryPercent
+      ) / 100
+    );
+
+
+  // ===================================================
+  // АВТОМАТИЧНИЙ ROI
+  // ===================================================
+
+  const calculatedRoi =
+
+    calculatedMargin > 0
+
+      ? (
+        calculatedProfit /
+        calculatedMargin
+      ) * 100
+
+      : 0;
+
+
+  // ===================================================
+  // ОЧИСТИТИ ФОРМУ
+  // ===================================================
+
+  function resetForm() {
+
+    setEditingTimestamp(
+      null
+    );
+
+    setCurrentBalance(
+      ""
+    );
+
+    setTrades(
+      ""
+    );
+
+    setNotes(
+      ""
+    );
+
+  }
+
+
+  // ===================================================
+  // РЕДАГУВАННЯ
+  // ===================================================
+
+  function startEdit(record) {
+
+    setEditingTimestamp(
+      record.timestamp
+    );
+
+
+    setCurrentBalance(
+      String(
+        record.balanceEnd
       )
     );
 
 
-  const totalProfit =
-    actualBalance -
-    Number(plan.balance);
+    setTrades(
+      record.trades ?? ""
+    );
 
 
-  // ---------------------------------------------------
-  // JSX
-  // ---------------------------------------------------
+    setNotes(
+      record.notes ?? ""
+    );
 
-  return (
 
-    <>
+    window.scrollTo({
 
-      <header className="page-head">
+      top: 0,
 
-        <div>
+      behavior: "smooth"
 
-          <p className="eyebrow">
-            Факт
-          </p>
+    });
 
-          <h1>
-            Щоденна аналітика
-          </h1>
+  }
 
-          <p className="muted">
-            Внось фактичні результати
-            та порівнюй їх із планом.
-          </p>
+
+  // ===================================================
+  // ЗБЕРЕЖЕННЯ
+  // ===================================================
+
+  async function handleSave() {
+
+    if (
+      currentBalance === ""
+    ) {
+
+      alert(
+        "Введи поточний баланс"
+      );
+
+      return;
+
+    }
+
+
+    const balanceValue =
+      Number(
+        currentBalance
+      );
+
+
+    if (
+      Number.isNaN(
+        balanceValue
+      )
+    ) {
+
+      alert(
+        "Некоректний баланс"
+      );
+
+      return;
+
+    }
+
+
+    if (
+      balanceValue < 0
+    ) {
+
+      alert(
+        "Баланс не може бути від'ємним"
+      );
+
+      return;
+
+    }
+
+
+    try {
+
+      setSaving(true);
+
+
+      let updatedRecords;
+
+
+      // ---------------------------------------------
+      // РЕДАГУВАННЯ
+      // ---------------------------------------------
+
+      if (editingRecord) {
+
+        updatedRecords =
+          records.map(
+            record => {
+
+              if (
+                String(
+                  record.timestamp
+                ) ===
+                String(
+                  editingRecord.timestamp
+                )
+              ) {
+
+                return {
+
+                  ...record,
+
+                  balanceEnd:
+                    balanceValue,
+
+                  trades:
+                    Number(
+                      trades
+                    ) || 0,
+
+                  notes
+
+                };
+
+              }
+
+
+              return record;
+
+            }
+          );
+
+
+      } else {
+
+        // -------------------------------------------
+        // НОВИЙ ДЕНЬ
+        // -------------------------------------------
+
+        updatedRecords = [
+
+          ...records,
+
+          {
+
+            timestamp:
+              new Date()
+                .toISOString(),
+
+            day:
+              formDay,
+
+            date:
+              getToday(),
+
+            balanceStart:
+              previousBalance,
+
+            actualProfit:
+              balanceValue -
+              previousBalance,
+
+            balanceEnd:
+              balanceValue,
+
+            roi:
+              calculatedRoi,
+
+            trades:
+              Number(
+                trades
+              ) || 0,
+
+            notes
+
+          }
+
+        ];
+
+      }
+
+
+      // ---------------------------------------------
+      // ПЕРЕРАХУНОК ВСІЄЇ ІСТОРІЇ
+      // ---------------------------------------------
+
+      const recalculated =
+        recalculateRecords(
+          updatedRecords,
+          plan
+        );
+
+
+      // ---------------------------------------------
+      // ЗАПИС У GOOGLE SHEETS
+      // ---------------------------------------------
+
+      await api.replaceRecords(
+        recalculated
+      );
+
+
+      // ---------------------------------------------
+      // ОНОВЛЮЄМО ЛОКАЛЬНИЙ STATE
+      // ---------------------------------------------
+
+      setRecords(
+        recalculated
+      );
+
+
+      resetForm();
+
+
+    } catch (error) {
+
+      console.error(
+        error
+      );
+
+
+      alert(
+        error.message ||
+        "Не вдалося зберегти результат"
+      );
+
+
+    } finally {
+
+      setSaving(false);
+
+    }
+
+  }
+
+
+  // ===================================================
+  // ВИДАЛЕННЯ
+  // ===================================================
+
+  async function handleDelete(
+    record
+  ) {
+
+    setDeleteRecord(
+      record
+    );
+
+  }
+
+  async function confirmDelete() {
+
+    if (!deleteRecord) {
+      return;
+    }
+
+
+    try {
+
+      setSaving(true);
+
+
+      const filtered =
+        records.filter(
+          item =>
+
+            String(
+              item.timestamp
+            ) !==
+            String(
+              deleteRecord.timestamp
+            )
+        );
+
+
+      const recalculated =
+        recalculateRecords(
+          filtered,
+          plan
+        );
+
+
+      await api.replaceRecords(
+        recalculated
+      );
+
+
+      setRecords(
+        recalculated
+      );
+
+
+      if (
+        String(
+          editingTimestamp
+        ) ===
+        String(
+          deleteRecord.timestamp
+        )
+      ) {
+
+        resetForm();
+
+      }
+
+
+      setDeleteRecord(
+        null
+      );
+
+
+    } catch (error) {
+
+      console.error(
+        error
+      );
+
+
+      alert(
+        error.message ||
+        "Не вдалося видалити запис"
+      );
+
+
+    } finally {
+
+      setSaving(false);
+
+    }
+
+  }
+
+  // ===================================================
+  // LOADING
+  // ===================================================
+
+  if (loading) {
+
+    return (
+
+      <div className="page">
+
+        <div className="card">
+
+          Завантаження...
 
         </div>
 
 
-        <button
-          className="secondary"
-          onClick={load}
-          disabled={loading}
-        >
+      </div>
 
-          <RefreshCw size={17} />
+    );
 
-          {loading
-            ? "Оновлення..."
-            : "Оновити"}
-
-        </button>
-
-      </header>
+  }
 
 
-      {/* PROGRESS */}
+  // ===================================================
+  // PAGE
+  // ===================================================
 
-      <section className="progress-card">
+  return (
+
+    <div className="page">
+
+
+      {/* =================================================
+          HEADER
+      ================================================= */}
+
+      <div className="page-header">
+
+        <div>
+
+          <h1>
+            Аналітика
+          </h1>
+
+          <p>
+            Внось фактичний баланс
+            та порівнюй його із планом.
+          </p>
+
+        </div>
+
+      </div>
+
+
+      {/* =================================================
+          ПРОГРЕС
+      ================================================= */}
+
+      <div className="card progress-card">
 
         <div className="progress-top">
 
           <div>
 
-            <span>
+            <span className="muted">
               Прогрес до цілі
             </span>
 
-            <b>
-              {money(actualBalance)}
+            <h2>
+
+              {formatMoney(
+                actualBalance
+              )}
+
               {" / "}
-              {money(plan.target)}
-              {" "}
-              USDT
-            </b>
+
+              {formatMoney(
+                plan.target
+              )}
+
+              {" USDT"}
+
+            </h2>
 
           </div>
 
 
-          <strong>
-            {progress.toFixed(1)}%
+          <strong className="progress-percent">
+
+            {progress.toFixed(1)}
+            %
+
           </strong>
 
         </div>
 
 
-        <div className="progress">
+        <div className="progress-bar">
 
           <div
+            className="progress-bar-fill"
             style={{
-              width: `${progress}%`
+              width:
+                `${progress}%`
             }}
           />
 
         </div>
 
 
-        <div className="mini-stats">
+        <div className="progress-info">
 
           <span>
 
@@ -489,10 +1133,10 @@ export default function AnalyticsPage() {
 
             {" "}
 
-            <b>
-              {planDay}
-            </b>
-
+            <strong>
+              {currentDay}
+            </strong>
+            {" "}
           </span>
 
 
@@ -502,7 +1146,7 @@ export default function AnalyticsPage() {
 
             {" "}
 
-            <b
+            <strong
               className={
                 totalProfit >= 0
                   ? "positive"
@@ -514,12 +1158,14 @@ export default function AnalyticsPage() {
                 ? "+"
                 : ""}
 
-              {money(totalProfit)}
+              {formatMoney(
+                totalProfit
+              )}
 
-              {" "}
-              USDT
+              {" USDT"}
 
-            </b>
+            </strong>
+            {" "}
 
           </span>
 
@@ -530,404 +1176,789 @@ export default function AnalyticsPage() {
 
             {" "}
 
-            <b>
+            <strong>
 
-              {money(planBalance)}
-              {" "}
-              USDT
+              {formatMoney(
+                plannedBalance
+              )}
 
-            </b>
+              {" USDT"}
+
+            </strong>
 
           </span>
 
         </div>
 
-      </section>
+      </div>
 
 
-      {/* FORM */}
+      {/* =================================================
+          ФОРМА
+      ================================================= */}
 
-      <section className="card form-card">
+      <div className="card">
 
-        <div className="card-title">
-
-          <Save size={19} />
+        <div className="section-title-row">
 
           <h2>
-            Внести результат дня
+
+            <Save size={20} />
+
+            {editingRecord
+              ? "Редагувати результат дня"
+              : "Внести результат дня"}
+
           </h2>
+
+
+          {editingRecord && (
+
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={
+                resetForm
+              }
+            >
+
+              <X size={18} />
+
+              Скасувати
+
+            </button>
+
+          )}
 
         </div>
 
 
-        <form
-          onSubmit={saveRecord}
-        >
+        <div className="form-grid">
 
-          <div className="form-grid">
+
+          {/* ДЕНЬ */}
+
+          <div className="field">
 
             <label>
-
               День
-
-              <input
-                required
-                type="number"
-                min="1"
-                value={form.day}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    day:
-                      event.target.value
-                  })
-                }
-              />
-
             </label>
 
-
-            <label>
-
-              Дата
-
-              <input
-                required
-                type="date"
-                value={form.date}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    date:
-                      event.target.value
-                  })
-                }
-              />
-
-            </label>
-
-
-            <label>
-
-              Баланс на початку
-
-              <input
-                required
-                type="number"
-                step="0.01"
-                value={
-                  form.balanceStart
-                }
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    balanceStart:
-                      event.target.value
-                  })
-                }
-              />
-
-            </label>
-
-
-            <label>
-
-              Фактичний
-              прибуток / збиток
-
-              <input
-                required
-                type="number"
-                step="0.01"
-                value={
-                  form.actualProfit
-                }
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    actualProfit:
-                      event.target.value
-                  })
-                }
-              />
-
-            </label>
-
-
-            <label>
-
-              ROI за день, %
-
-              <input
-                type="number"
-                step="0.01"
-                value={form.roi}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    roi:
-                      event.target.value
-                  })
-                }
-              />
-
-            </label>
-
-
-            <label>
-
-              Кількість угод
-
-              <input
-                type="number"
-                min="0"
-                value={form.trades}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    trades:
-                      event.target.value
-                  })
-                }
-              />
-
-            </label>
+            <input
+              type="number"
+              value={formDay}
+              readOnly
+              className="readonly-input"
+            />
 
           </div>
 
 
-          <label className="full">
+          {/* ДАТА */}
 
-            Коментар / примітка
+          <div className="field">
 
-            <textarea
-              rows="3"
-              value={form.notes}
-              onChange={(event) =>
-                setForm({
-                  ...form,
-                  notes:
-                    event.target.value
-                })
+            <label>
+              Дата
+            </label>
+
+            <input
+              type="date"
+              value={formDate}
+              readOnly
+              className="readonly-input"
+            />
+
+          </div>
+
+
+          {/* ПОЧАТКОВИЙ БАЛАНС */}
+
+          <div className="field">
+
+            <label>
+              Баланс на початку
+            </label>
+
+            <input
+              type="number"
+              value={
+                formStartBalance
+              }
+              readOnly
+              className="readonly-input"
+            />
+
+          </div>
+
+
+          {/* ПОТОЧНИЙ БАЛАНС */}
+
+          <div className="field">
+
+            <label>
+              Поточний баланс, USDT
+            </label>
+
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={
+                currentBalance
+              }
+              onChange={e =>
+                setCurrentBalance(
+                  e.target.value
+                )
+              }
+              placeholder="Наприклад: 3613"
+              autoFocus
+            />
+
+            <small className="field-hint">
+
+              Введи тільки поточний
+              баланс на рахунку.
+
+            </small>
+
+          </div>
+
+
+          {/* PNL */}
+
+          <div className="field">
+
+            <label>
+              Фактичний прибуток / збиток
+            </label>
+
+            <input
+              type="number"
+              value={
+                calculatedProfit
+              }
+              readOnly
+              className={
+                calculatedProfit >= 0
+                  ? "readonly-input input-positive"
+                  : "readonly-input input-negative"
               }
             />
 
-          </label>
+          </div>
 
 
-          <button
-            className="primary"
-            disabled={loading}
-          >
+          {/* ROI */}
 
-            <Save size={17} />
+          <div className="field">
 
-            {loading
-              ? "Збереження..."
-              : "Зберегти в Google Sheets"}
+            <label>
+              ROI за день, %
+            </label>
 
-          </button>
+            <input
+              type="number"
+              value={
+                calculatedRoi.toFixed(
+                  2
+                )
+              }
+              readOnly
+              className="readonly-input"
+            />
 
-        </form>
+          </div>
 
 
-        {message && (
+          {/* УГОДИ */}
 
-          <div className="message">
+          <div className="field">
 
-            {message}
+            <label>
+              Кількість угод
+            </label>
+
+            <input
+              type="number"
+              min="0"
+              value={trades}
+              onChange={e =>
+                setTrades(
+                  e.target.value
+                )
+              }
+              placeholder="Необов'язково"
+            />
+
+          </div>
+
+
+          {/* КОМЕНТАР */}
+
+          <div className="field field-full">
+
+            <label>
+              Коментар / примітка
+            </label>
+
+            <textarea
+              value={notes}
+              onChange={e =>
+                setNotes(
+                  e.target.value
+                )
+              }
+              placeholder="Наприклад: 2 LONG, 1 SHORT..."
+              rows="3"
+            />
+
+          </div>
+
+        </div>
+
+
+        {/* =================================================
+            ПРЕВ'Ю РОЗРАХУНКУ
+        ================================================= */}
+
+        {currentBalance !== "" && (
+
+          <div className="calculation-preview">
+
+
+            <div>
+
+              <span>
+                Попередній баланс
+              </span>
+
+              <strong>
+
+                {formatMoney(
+                  formStartBalance
+                )}
+
+                {" USDT"}
+
+              </strong>
+
+            </div>
+
+
+            <div>
+
+              <span>
+                Зміна
+              </span>
+
+              <strong
+                className={
+                  calculatedProfit >= 0
+                    ? "positive"
+                    : "negative"
+                }
+              >
+
+                {calculatedProfit >= 0
+                  ? "+"
+                  : ""}
+
+                {formatMoney(
+                  calculatedProfit
+                )}
+
+                {" USDT"}
+
+              </strong>
+
+            </div>
+
+
+            <div>
+
+              <span>
+                Новий баланс
+              </span>
+
+              <strong>
+
+                {formatMoney(
+                  Number(
+                    currentBalance
+                  )
+                )}
+
+                {" USDT"}
+
+              </strong>
+
+            </div>
+
+
+            <div>
+
+              <span>
+                ROI
+              </span>
+
+              <strong>
+
+                {calculatedRoi.toFixed(
+                  2
+                )}
+
+                %
+
+              </strong>
+
+            </div>
+
 
           </div>
 
         )}
 
-      </section>
+
+        {/* =================================================
+            SAVE BUTTON
+        ================================================= */}
+
+        <button
+          type="button"
+          className="primary"
+          onClick={
+            handleSave
+          }
+          disabled={saving}
+        >
+
+          <Save size={18} />
+
+          {saving
+
+            ? "Збереження..."
+
+            : editingRecord
+
+              ? "Зберегти зміни"
+
+              : "Зберегти"}
+
+        </button>
+
+      </div>
 
 
-      {/* HISTORY */}
+      {/* =================================================
+          ІСТОРІЯ
+      ================================================= */}
 
-      <section className="card table-card">
+      <div className="card">
 
-        <div className="card-title">
-
-          <BarChart3 size={19} />
+        <div className="section-title-row">
 
           <h2>
+
+            <BarChart3 size={20} />
+
             Історія
+
           </h2>
+
+
+          {records.length > 0 && (
+
+            <span className="record-count">
+
+              {records.length}
+
+              {" "}
+
+              {records.length === 1
+                ? "запис"
+                : "записів"}
+
+            </span>
+
+          )}
 
         </div>
 
 
-        <div className="table-wrap">
+        {records.length === 0 ? (
 
-          <table>
+          <div className="empty-state">
 
-            <thead>
+            Ще немає внесених
+            результатів.
 
-              <tr>
+          </div>
 
-                <th>
-                  День
-                </th>
+        ) : (
 
-                <th>
-                  Дата
-                </th>
+          <div className="table-wrapper">
 
-                <th>
-                  Початок
-                </th>
+            <table>
 
-                <th>
-                  Факт PnL
-                </th>
+              <thead>
 
-                <th>
-                  Кінець
-                </th>
+                <tr>
 
-                <th>
-                  ROI
-                </th>
+                  <th>
+                    День
+                  </th>
 
-                <th>
-                  Угод
-                </th>
+                  <th>
+                    Дата
+                  </th>
 
-                <th>
-                  Статус
-                </th>
+                  <th>
+                    Початок
+                  </th>
 
-              </tr>
+                  <th>
+                    Факт PnL
+                  </th>
 
-            </thead>
+                  <th>
+                    Кінець
+                  </th>
 
+                  <th>
+                    ROI
+                  </th>
 
-            <tbody>
+                  <th>
+                    Угоди
+                  </th>
 
-              {sorted.map(
-                (record, index) => {
+                  <th>
+                    Статус
+                  </th>
 
-                  const plannedBalance =
-                    Number(plan.balance) *
-                    Math.pow(
-                      1 + dailyGrowth,
-                      Number(record.day)
-                    );
+                  <th>
+                    Дії
+                  </th>
 
+                </tr>
 
-                  const difference =
-                    Number(
-                      record.balanceEnd
-                    ) -
-                    plannedBalance;
+              </thead>
 
 
-                  return (
+              <tbody>
 
-                    <tr key={index}>
+                {sortedRecords.map(
+                  record => {
 
-                      <td>
-                        {record.day}
-                      </td>
+                    const profit =
+                      Number(
+                        record.actualProfit
+                      ) || 0;
 
-                      <td>
-                        {record.date}
-                      </td>
 
-                      <td>
-                        {money(
-                          record.balanceStart
-                        )}
-                      </td>
+                    const planned =
+                      Number(
+                        plan.balance
+                      ) *
 
-                      <td
-                        className={
-                          Number(
-                            record.actualProfit
-                          ) >= 0
-                            ? "positive"
-                            : "negative"
+                      Math.pow(
+
+                        1 +
+                        dailyGrowth,
+
+                        Number(
+                          record.day
+                        )
+
+                      );
+
+
+                    return (
+
+                      <tr
+                        key={
+                          record.timestamp
                         }
                       >
 
-                        {Number(
-                          record.actualProfit
-                        ) >= 0
-                          ? "+"
-                          : ""}
+                        <td>
 
-                        {money(
-                          record.actualProfit
-                        )}
+                          <strong>
+                            {record.day}
+                          </strong>
 
-                      </td>
+                        </td>
 
-                      <td>
 
-                        <b>
-                          {money(
-                            record.balanceEnd
+                        <td>
+
+                          {formatDate(
+                            record.date
                           )}
-                        </b>
 
-                      </td>
+                        </td>
 
-                      <td>
-                        {record.roi}%
-                      </td>
 
-                      <td>
-                        {record.trades}
-                      </td>
+                        <td>
 
-                      <td>
+                          {formatMoney(
+                            record.balanceStart
+                          )}
 
-                        <span
+                        </td>
+
+
+                        <td
                           className={
-                            difference >= 0
-                              ? "pill good"
-                              : "pill bad"
+                            profit >= 0
+                              ? "positive"
+                              : "negative"
                           }
                         >
 
-                          {difference >= 0
-                            ? "В плані"
-                            : "Нижче плану"}
+                          {profit >= 0
+                            ? "+"
+                            : ""}
 
-                        </span>
+                          {formatMoney(
+                            profit
+                          )}
 
-                      </td>
-
-                    </tr>
-
-                  );
-
-                }
-              )}
-
-            </tbody>
-
-          </table>
-
-        </div>
+                        </td>
 
 
-        {!sorted.length && (
+                        <td>
 
-          <div className="empty">
+                          <strong>
 
-            Поки немає записів.
-            Додай перший день вище.
+                            {formatMoney(
+                              record.balanceEnd
+                            )}
+
+                          </strong>
+
+                        </td>
+
+
+                        <td>
+
+                          {Number(
+                            record.roi
+                          ).toFixed(
+                            2
+                          )}
+
+                          %
+
+                        </td>
+
+
+                        <td>
+
+                          {record.trades ||
+                            0}
+
+                        </td>
+
+
+                        <td>
+
+                          {Number(
+                            record.balanceEnd
+                          ) >=
+                            planned ? (
+
+                            <span className="status success">
+                              У плані
+                            </span>
+
+                          ) : (
+
+                            <span className="status warning">
+                              Нижче плану
+                            </span>
+
+                          )}
+
+                        </td>
+
+
+                        <td>
+
+                          <div className="row-actions">
+
+
+                            {/* РЕДАГУВАТИ */}
+
+                            <button
+                              type="button"
+                              className="icon-button edit"
+                              title="Редагувати"
+                              onClick={() =>
+                                startEdit(
+                                  record
+                                )
+                              }
+                              disabled={saving}
+                            >
+
+                              <Pencil
+                                size={17}
+                              />
+
+                            </button>
+
+
+                            {/* ВИДАЛИТИ */}
+
+                            <button
+                              type="button"
+                              className="icon-button delete"
+                              title="Видалити"
+                              onClick={() =>
+                                handleDelete(
+                                  record
+                                )
+                              }
+                              disabled={saving}
+                            >
+
+                              <Trash2
+                                size={17}
+                              />
+
+                            </button>
+
+
+                          </div>
+
+                        </td>
+
+                      </tr>
+
+                    );
+
+                  }
+                )}
+
+              </tbody>
+
+            </table>
 
           </div>
 
         )}
 
-      </section>
+      </div>
+      {/* =================================================
+    DELETE MODAL
+================================================= */}
 
-    </>
+      {deleteRecord && (
+
+        <div
+          className="modal-overlay"
+          onMouseDown={e => {
+
+            if (
+              e.target === e.currentTarget &&
+              !saving
+            ) {
+
+              setDeleteRecord(null);
+
+            }
+
+          }}
+        >
+
+          <div
+            className="delete-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-modal-title"
+          >
+
+            <div className="delete-modal-icon">
+
+              <Trash2 size={24} />
+
+            </div>
+
+
+            <div className="delete-modal-content">
+
+              <h3 id="delete-modal-title">
+                Видалити запис?
+              </h3>
+
+              <p>
+
+                Ви дійсно хочете видалити
+                результат за
+
+                {" "}
+
+                <strong>
+                  День {deleteRecord.day}
+                </strong>
+                ?
+
+              </p>
+
+              <span>
+
+                Після видалення всі наступні
+                дні автоматично перерахуються.
+
+              </span>
+
+            </div>
+
+
+            <div className="delete-modal-actions">
+
+              <button
+                type="button"
+                className="modal-cancel-button"
+                onClick={() =>
+                  setDeleteRecord(null)
+                }
+                disabled={saving}
+              >
+
+                Скасувати
+
+              </button>
+
+
+              <button
+                type="button"
+                className="modal-delete-button"
+                onClick={
+                  confirmDelete
+                }
+                disabled={saving}
+              >
+
+                <Trash2 size={17} />
+
+                {saving
+                  ? "Видалення..."
+                  : "Видалити"}
+
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      )}
+    </div>
 
   );
 

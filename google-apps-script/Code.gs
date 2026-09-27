@@ -135,8 +135,11 @@ function doGet(e) {
   try {
 
     const action =
-      e.parameter.action ||
-      "getRecords";
+      e &&
+      e.parameter &&
+      e.parameter.action
+        ? e.parameter.action
+        : "getRecords";
 
 
     // -----------------------------------------------
@@ -149,9 +152,12 @@ function doGet(e) {
     ) {
 
       return json_({
+
         ok: true,
+
         records:
           getRecords_()
+
       });
 
     }
@@ -167,9 +173,12 @@ function doGet(e) {
     ) {
 
       return json_({
+
         ok: true,
+
         plan:
           getPlan_()
+
       });
 
     }
@@ -190,6 +199,34 @@ function doGet(e) {
 
         record:
           saveRecord_(
+            e.parameter
+          )
+
+      });
+
+    }
+
+
+    // -----------------------------------------------
+    // REPLACE RECORDS
+    //
+    // Використовується при:
+    // - редагуванні
+    // - видаленні
+    // - перерахунку історії
+    // -----------------------------------------------
+
+    if (
+      action ===
+      "replaceRecords"
+    ) {
+
+      return json_({
+
+        ok: true,
+
+        result:
+          replaceRecords_(
             e.parameter
           )
 
@@ -221,6 +258,10 @@ function doGet(e) {
     }
 
 
+    // -----------------------------------------------
+    // UNKNOWN ACTION
+    // -----------------------------------------------
+
     return json_({
 
       ok: false,
@@ -230,6 +271,7 @@ function doGet(e) {
 
     });
 
+
   } catch (error) {
 
     return json_({
@@ -237,7 +279,12 @@ function doGet(e) {
       ok: false,
 
       error:
-        String(error)
+        String(
+          error &&
+          error.message
+            ? error.message
+            : error
+        )
 
     });
 
@@ -253,9 +300,13 @@ function doGet(e) {
 function json_(object) {
 
   return ContentService
+
     .createTextOutput(
-      JSON.stringify(object)
+      JSON.stringify(
+        object
+      )
     )
+
     .setMimeType(
       ContentService.MimeType.JSON
     );
@@ -298,28 +349,44 @@ function getRecords_() {
           row[0],
 
         day:
-          row[1],
+          Number(
+            row[1]
+          ) || 0,
 
         date:
-          row[2],
+          row[2]
+            ? String(row[2])
+            : "",
 
         balanceStart:
-          row[3],
+          Number(
+            row[3]
+          ) || 0,
 
         actualProfit:
-          row[4],
+          Number(
+            row[4]
+          ) || 0,
 
         balanceEnd:
-          row[5],
+          Number(
+            row[5]
+          ) || 0,
 
         roi:
-          row[6],
+          Number(
+            row[6]
+          ) || 0,
 
         trades:
-          row[7],
+          Number(
+            row[7]
+          ) || 0,
 
         notes:
           row[8]
+            ? String(row[8])
+            : ""
 
       };
 
@@ -352,8 +419,12 @@ function getPlan_() {
   values.forEach(
     (row) => {
 
-      object[row[0]] =
-        row[1];
+      if (row[0]) {
+
+        object[row[0]] =
+          row[1];
+
+      }
 
     }
   );
@@ -398,6 +469,10 @@ function getPlan_() {
 
 // =====================================================
 // SAVE RECORD
+//
+// Цей метод залишаємо для сумісності.
+// Нова AnalyticsPage переважно використовує
+// replaceRecords_().
 // =====================================================
 
 function saveRecord_(params) {
@@ -417,28 +492,23 @@ function saveRecord_(params) {
     params.date || "",
 
     Number(
-      params.balanceStart ||
-      0
+      params.balanceStart || 0
     ),
 
     Number(
-      params.actualProfit ||
-      0
+      params.actualProfit || 0
     ),
 
     Number(
-      params.balanceEnd ||
-      0
+      params.balanceEnd || 0
     ),
 
     Number(
-      params.roi ||
-      0
+      params.roi || 0
     ),
 
     Number(
-      params.trades ||
-      0
+      params.trades || 0
     ),
 
     params.notes || ""
@@ -457,6 +527,169 @@ function saveRecord_(params) {
 
 
 // =====================================================
+// REPLACE RECORDS
+//
+// Повністю переписуємо Records.
+//
+// Це потрібно для того, щоб після редагування
+// або видалення можна було синхронізувати
+// всю історію з Google Sheets.
+// =====================================================
+
+function replaceRecords_(params) {
+
+  const { records } =
+    getSheet_();
+
+
+  let data = [];
+
+
+  try {
+
+    data =
+      JSON.parse(
+        params.records ||
+        "[]"
+      );
+
+  } catch (error) {
+
+    throw new Error(
+      "Некоректні дані записів"
+    );
+
+  }
+
+
+  // -----------------------------------------------
+  // Очищаємо стару таблицю
+  // -----------------------------------------------
+
+  records.clearContents();
+
+
+  // -----------------------------------------------
+  // Повертаємо заголовки
+  // -----------------------------------------------
+
+  records.appendRow([
+
+    "timestamp",
+    "day",
+    "date",
+    "balanceStart",
+    "actualProfit",
+    "balanceEnd",
+    "roi",
+    "trades",
+    "notes"
+
+  ]);
+
+
+  // Якщо записів немає —
+  // просто залишаємо заголовки.
+
+  if (
+    !data.length
+  ) {
+
+    return {
+
+      message:
+        "All records deleted",
+
+      count: 0
+
+    };
+
+  }
+
+
+  // -----------------------------------------------
+  // Формуємо рядки
+  // -----------------------------------------------
+
+  const rows =
+    data.map(
+      (record) => {
+
+        return [
+
+          record.timestamp
+            ? record.timestamp
+            : new Date(),
+
+          Number(
+            record.day || 0
+          ),
+
+          record.date || "",
+
+          Number(
+            record.balanceStart ||
+            0
+          ),
+
+          Number(
+            record.actualProfit ||
+            0
+          ),
+
+          Number(
+            record.balanceEnd ||
+            0
+          ),
+
+          Number(
+            record.roi ||
+            0
+          ),
+
+          Number(
+            record.trades ||
+            0
+          ),
+
+          record.notes || ""
+
+        ];
+
+      }
+    );
+
+
+  // -----------------------------------------------
+  // Записуємо всі рядки
+  // -----------------------------------------------
+
+  records
+    .getRange(
+      2,
+      1,
+      rows.length,
+      9
+    )
+    .setValues(
+      rows
+    );
+
+
+  return {
+
+    message:
+      "Records replaced",
+
+    count:
+      rows.length
+
+  };
+
+}
+
+
+// =====================================================
 // SAVE PLAN
 // =====================================================
 
@@ -470,47 +703,59 @@ function savePlan_(params) {
 
     [
       "balance",
+
       Number(
         params.balance ||
         0
       )
+
     ],
 
     [
       "entryPercent",
+
       Number(
         params.entryPercent ||
         0
       )
+
     ],
 
     [
       "leverage",
+
       Number(
         params.leverage ||
         1
       )
+
     ],
 
     [
       "roi",
+
       Number(
         params.roi ||
         0
       )
+
     ],
 
     [
       "target",
+
       Number(
         params.target ||
         0
       )
+
     ],
 
     [
       "updatedAt",
+
       new Date()
+
     ]
 
   ];
